@@ -48,6 +48,8 @@ interface entityConfig {
   value_numeric_history: number[];
   uom?: string;
   is_disabled_by_default?: boolean;
+  position?: number;
+  tilt?: number;
 }
 
 export const stateOn = "ON";
@@ -355,10 +357,11 @@ class ActionRenderer {
     entity: entityConfig,
     action: string,
     opt: string,
-    value: string | number,
-    min?: string | undefined,
-    max?: string | undefined,
-    step = 1
+    value: number,
+    min?: number | undefined,
+    max?: number | undefined,
+    step = 1,
+    scale_factor: number = 1,
   ) {
     if(entity.mode == 1) {
       return html`<div class="range">
@@ -367,13 +370,13 @@ class ActionRenderer {
           type="${entity.mode == 1 ? "number" : "range"}"
           name="${entity.unique_id}"
           id="${entity.unique_id}"
-          step="${step}"
-          min="${min || Math.min(0, value as number)}"
-          max="${max || Math.max(10, value as number)}"
-          .value="${value}"
+          step="${step*scale_factor}"
+          min="${(min || Math.min(0/scale_factor, value)) * scale_factor}"
+          max="${(max || Math.max(10/scale_factor, value)) * scale_factor}"
+          .value="${value*scale_factor}"
           @change="${(e: Event) => {
             const val = (<HTMLTextAreaElement>e.target)?.value;
-            this.actioner?.restAction(entity, `${action}?${opt}=${val}`);
+            this.actioner?.restAction(entity, `${action}?${opt}=${Number(val) / scale_factor}`);
           }}"
         />
         <label>${max || 100}</label>
@@ -382,13 +385,13 @@ class ActionRenderer {
       return html`    
       <esp-range-slider
         name="${entity.unique_id}"
-        step="${step}"
-        min="${min}"
-        max="${max}"
-        .value="${value}"
+        step="${step*scale_factor}"
+        min="${Number(min)*scale_factor}"
+        max="${Number(max)*scale_factor}"
+        .value="${Number(value)*scale_factor}"
         @state="${(e: CustomEvent) => {
             const val = (<HTMLTextAreaElement>e.target)?.value;
-            this.actioner?.restAction(entity, `${action}?${opt}=${e.detail.state}`);
+            this.actioner?.restAction(entity, `${action}?${opt}=${Number(e.detail.state) / scale_factor}`);
           }}"
       ></esp-range-slider>`;
     }
@@ -569,9 +572,38 @@ class ActionRenderer {
 
   render_cover() {
     if (!this.entity) return;
-    return html`${this._actionButton(this.entity, "↑", "open")}
-    ${this._actionButton(this.entity, "☐", "stop")}
-    ${this._actionButton(this.entity, "↓", "close")}`;
+    return html `
+      <table width="100%", col>
+        <tr><td colspan="5" align="center">Position</td></tr>
+        <tr><td colspan="5"> ${this._range(this.entity, `set`, "position", this.entity.position ? this.entity.position : 0, 0, 1, 0.01, 100)} </td></tr>
+        ${
+          this.entity?.tilt !== undefined
+          ? html `
+            <tr><td colspan="5" align="center">Tilt</td></tr>
+            <tr><td colspan="5"> ${this._range(this.entity, `set`, "tilt", this.entity.tilt ? this.entity.tilt : 0, 0, 1, 0.01, 100)} </td></tr>`
+          : ""
+        }
+        <tr>
+          <td align="center">${this._actionButton(this.entity, "↑", "open")}</td>
+          ${
+            this.entity?.tilt !== undefined
+            ? html `
+              <td align="center">${this._actionButton(this.entity, "↗", "set?tilt=1.0")}</td>
+              `
+            : ""
+          }
+          <td align="center">${this._actionButton(this.entity, "☐", "stop")}</td>
+          ${
+            this.entity?.tilt !== undefined
+            ? html `
+              <td align="center">${this._actionButton(this.entity, "↘", "set?tilt=0.0")}</td>
+              `
+            : ""
+          }
+          <td align="center">${this._actionButton(this.entity, "↓", "close")}</td>
+        </tr>
+      </table>
+    `;
   }
 
   render_button() {
